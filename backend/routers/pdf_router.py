@@ -19,16 +19,33 @@ async def upload_pdf(
     api_key: Optional[str] = Form(None)
 ):
     if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        raise HTTPException(
+            status_code=400,
+            detail="PDF Cannot Be Embedded: Only PDF files are supported."
+        )
         
-    key = api_key or config.OPENAI_API_KEY
     doc_id = str(uuid.uuid4())[:8]
     temp_path = os.path.join(config.TEMP_UPLOAD_DIR, f"{doc_id}_{file.filename}")
     
     try:
+        # Save temp file to perform audit
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
+        file_size = os.path.path.getsize(temp_path) if hasattr(os.path.path, 'getsize') else os.path.getsize(temp_path)
+        
+        # 🔍 Run Mandatory Pre-Embedding PDF Audit
+        is_valid, audit_reason = PDFService.audit_pdf(temp_path, file_size)
+        if not is_valid:
+            # Delete temp file if audit fails
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise HTTPException(
+                status_code=400,
+                detail=f"PDF Cannot Be Embedded: {audit_reason}"
+            )
+            
+        key = api_key or config.OPENAI_API_KEY
         chunks, total_pages = PDFService.process_pdf(temp_path)
         VectorService.create_collection(chunks, collection_name=doc_id, api_key=key)
         
@@ -44,10 +61,14 @@ async def upload_pdf(
             document_id=doc_id,
             total_pages=total_pages,
             total_chunks=len(chunks),
-            message="PDF uploaded and indexed successfully."
+            message="PDF audit passed and vector embedding completed successfully."
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise HTTPException(status_code=500, detail=f"PDF Cannot Be Embedded: {str(e)}")
 
 @router.post("/summarize", response_model=SummarizeResponse)
 async def summarize_pdf(req: SummarizeRequest):
