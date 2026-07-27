@@ -1,0 +1,29 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Storage & Vector DB
+backend/storage/
+chroma_db/
+temp_uploads/
+*.pdf
+
+# Node & React
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+
+# Environment & Logs
+.env
+*.log
+
+# Test Artifacts
+test_sample.pdf
+sample_ai_roadmap.pdf
+playwright_test_result.png
+live_summary_roadmap.png
+live_chat_rag.png
+live_uploaded_state.png
