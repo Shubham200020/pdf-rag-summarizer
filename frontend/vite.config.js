@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// Use relative base './' so assets load seamlessly on both unified FastAPI (root '/') and GitHub Pages ('/pdf-rag-summarizer/')
 export default defineConfig({
   plugins: [react()],
-  base: '/pdf-rag-summarizer/',
+  base: './',
   server: {
     port: 5173,
     host: true,
