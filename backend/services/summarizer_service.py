@@ -13,6 +13,12 @@ class SummarizerService:
         key = api_key or config.OPENAI_API_KEY
         model = model_name or config.DEFAULT_MODEL
         
+        # Filter out raw image metadata placeholders for summary text generation so only actual document text is summarized
+        text_chunks = [c for c in chunks if c.metadata.get("content_type") != "image_figure" and not c.page_content.startswith("[Picture/Figure")]
+        
+        # Fallback to all chunks if document contains only images
+        chunks_to_summarize = text_chunks if text_chunks else chunks
+        
         if key and key != "your_openai_api_key_here":
             try:
                 llm = ChatOpenAI(temperature=0.2, model=model, openai_api_key=key)
@@ -24,7 +30,7 @@ class SummarizerService:
                 map_chain = map_prompt | llm | StrOutputParser()
                 
                 chunk_summaries = []
-                for chunk in chunks[:15]:
+                for chunk in chunks_to_summarize[:15]:
                     summary = map_chain.invoke({"text": chunk.page_content})
                     chunk_summaries.append(summary)
                     
@@ -47,17 +53,17 @@ class SummarizerService:
             except Exception as e:
                 print(f"[SummarizerService] OpenAI error: {e}. Using extractive fallback.")
 
-        # Zero-Config Extractive Summary Fallback
-        doc_text_snippets = [c.page_content[:250].strip() for c in chunks[:6]]
+        # Zero-Config Extractive Summary Fallback (Uses text chunks only)
+        doc_text_snippets = [c.page_content[:250].strip() for c in chunks_to_summarize[:6]]
         summary_bullets = "\n".join([f"- {s}..." for s in doc_text_snippets])
         
         roadmap_phases = "\n".join([
-            f"1. **Phase {i+1} (Section {i+1})**: {chunk.page_content[:120].strip()}..."
-            for i, chunk in enumerate(chunks[:5])
+            f"{i+1}. **Phase {i+1}**: {chunk.page_content[:140].strip()}..."
+            for i, chunk in enumerate(chunks_to_summarize[:5])
         ])
         
         return f"""### EXECUTIVE SUMMARY (Extractive Fallback)
-The document contains {len(chunks)} text chunks across key topics. Key sections include:
+The document contains {len(text_chunks)} text passages across key topics. Key sections include:
 
 {summary_bullets}
 
