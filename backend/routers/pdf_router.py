@@ -32,7 +32,7 @@ async def upload_pdf(
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        file_size = os.path.path.getsize(temp_path) if hasattr(os.path.path, 'getsize') else os.path.getsize(temp_path)
+        file_size = os.path.getsize(temp_path)
         
         # 🔍 Run Mandatory Pre-Embedding PDF Audit
         is_valid, audit_reason = PDFService.audit_pdf(temp_path, file_size)
