@@ -7,6 +7,7 @@ export default defineConfig({
   base: process.env.NODE_ENV === 'production' ? '/pdf-rag-summarizer/' : '/',
   server: {
     port: 5173,
-    host: true
+    host: true,
+    allowedHosts: true
   }
 })
