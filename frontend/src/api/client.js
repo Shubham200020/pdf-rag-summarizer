@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Dynamic API Base URL supporting local dev & production deployment
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+// Use relative '/api' path by default so mobile browsers & production deployments route to the server origin automatically
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const uploadPdfApi = async (file, apiKey = '') => {
   const formData = new FormData();
