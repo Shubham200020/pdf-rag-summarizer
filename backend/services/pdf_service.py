@@ -1,17 +1,19 @@
 import os
+import fitz
 from typing import List, Tuple
 from pypdf import PdfReader
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from services.image_service import ImageService
 import config
 
 class PDFService:
-    """PDF parsing, chunking, and pre-embedding audit validation service."""
+    """PDF parsing, chunking, multimodal image extraction, and audit validation service."""
     
     @staticmethod
     def audit_pdf(pdf_path: str, file_size: int) -> Tuple[bool, str]:
-        """Audits PDF file against size, encryption, page count, and text extractability constraints."""
+        """Audits PDF file against size, encryption, page count, and text/image extractability constraints."""
         # 1. File Size Audit
         if file_size == 0:
             return False, "Uploaded PDF file is empty (0 bytes)."
@@ -23,6 +25,7 @@ class PDFService:
         # 2. Open PDF and check structure
         try:
             reader = PdfReader(pdf_path)
+            doc_fitz = fitz.open(pdf_path)
         except Exception as e:
             return False, f"Corrupted or invalid PDF structure: {str(e)}"
             
@@ -38,20 +41,24 @@ class PDFService:
         if total_pages > config.MAX_PAGE_COUNT:
             return False, f"Document contains {total_pages} pages, which exceeds the maximum limit of {config.MAX_PAGE_COUNT} pages."
             
-        # 5. Extractable Text Check
+        # 5. Extractable Text & Embedded Image Audit
         total_extracted_text = ""
-        for page in reader.pages[:5]:
+        total_images = 0
+        for i, page in enumerate(reader.pages[:5]):
             text = page.extract_text() or ""
             total_extracted_text += text.strip()
-            
-        if len(total_extracted_text) < config.MIN_TEXT_CHARS:
-            return False, "PDF contains no extractable text. It may be an image-only scanned document without OCR."
+            if i < len(doc_fitz):
+                total_images += len(doc_fitz[i].get_images())
+
+        # Pass audit if either text >= MIN_TEXT_CHARS OR embedded images are present
+        if len(total_extracted_text) < config.MIN_TEXT_CHARS and total_images == 0:
+            return False, "PDF contains no extractable text or embedded images/scans."
             
         return True, "PDF audit passed successfully."
 
     @staticmethod
-    def process_pdf(pdf_path: str) -> Tuple[List[Document], int]:
-        """Parses PDF and splits into chunks. Returns (chunks, total_pages)."""
+    def process_pdf(pdf_path: str, api_key: str = None) -> Tuple[List[Document], int]:
+        """Parses PDF text, extracts embedded images/figures, and returns all chunks & captions for vector indexing."""
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF not found at {pdf_path}")
             
@@ -62,6 +69,7 @@ class PDFService:
         file_name = os.path.basename(pdf_path)
         for p in pages:
             p.metadata["source_file"] = file_name
+            p.metadata["content_type"] = "text_chunk"
             if "page" in p.metadata:
                 p.metadata["page_label"] = p.metadata["page"] + 1
 
@@ -71,5 +79,10 @@ class PDFService:
             separators=["\n\n", "\n", " ", ""]
         )
         
-        chunks = splitter.split_documents(pages)
-        return chunks, total_pages
+        text_chunks = splitter.split_documents(pages)
+        
+        # 🖼️ Extract and Caption Embedded Images / Diagrams
+        image_chunks = ImageService.extract_and_caption_images(pdf_path, api_key=api_key)
+        
+        all_chunks = text_chunks + image_chunks
+        return all_chunks, total_pages

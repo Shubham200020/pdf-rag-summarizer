@@ -37,7 +37,6 @@ async def upload_pdf(
         # 🔍 Run Mandatory Pre-Embedding PDF Audit
         is_valid, audit_reason = PDFService.audit_pdf(temp_path, file_size)
         if not is_valid:
-            # Delete temp file if audit fails
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             raise HTTPException(
@@ -46,7 +45,9 @@ async def upload_pdf(
             )
             
         key = api_key or config.OPENAI_API_KEY
-        chunks, total_pages = PDFService.process_pdf(temp_path)
+        
+        # Multimodal Text + Image Caption Processing
+        chunks, total_pages = PDFService.process_pdf(temp_path, api_key=key)
         VectorService.create_collection(chunks, collection_name=doc_id, api_key=key)
         
         document_cache[doc_id] = {
@@ -61,7 +62,7 @@ async def upload_pdf(
             document_id=doc_id,
             total_pages=total_pages,
             total_chunks=len(chunks),
-            message="PDF audit passed and vector embedding completed successfully."
+            message="Multimodal PDF audit passed, images extracted, and vector embedding completed successfully."
         )
     except HTTPException:
         raise
