@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Default 24/7 Cloud Backend Production URL (Railway / Render)
-const DEFAULT_CLOUD_BACKEND = 'https://pdf-rag-summarizer-production.up.railway.app/api';
+// Default active backend server URL (routes GitHub Pages static uploads to active backend)
+const DEFAULT_CLOUD_BACKEND = 'https://eighty-feet-unite.loca.lt/api';
 
 export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
@@ -12,7 +12,7 @@ export const getApiBaseUrl = () => {
   if (customBackend) {
     return customBackend.endsWith('/api') ? customBackend : `${customBackend.replace(/\/$/, '')}/api`;
   }
-  // If hosted on GitHub Pages or external production, use the 24/7 Railway / Render cloud backend
+  // If hosted on GitHub Pages static host, connect to active backend tunnel
   if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
     return DEFAULT_CLOUD_BACKEND;
   }
