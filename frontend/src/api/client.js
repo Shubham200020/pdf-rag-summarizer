@@ -1,5 +1,8 @@
 import axios from 'axios';
 
+// Default active 24/7 cloud backend URL
+const DEFAULT_CLOUD_BACKEND = 'https://eighty-feet-unite.loca.lt/api';
+
 export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
@@ -9,7 +12,7 @@ export const getApiBaseUrl = () => {
   if (customBackend) {
     return customBackend.endsWith('/api') ? customBackend : `${customBackend.replace(/\/$/, '')}/api`;
   }
-  return '/api';
+  return DEFAULT_CLOUD_BACKEND;
 };
 
 export const uploadPdfApi = async (file, apiKey = '') => {
