@@ -2,17 +2,36 @@ import React, { useState, useEffect } from 'react';
 import PdfUploader from './components/PdfUploader';
 import SummaryRoadmapView from './components/SummaryRoadmapView';
 import RagChat from './components/RagChat';
-import { FileText, MessageSquare, Key, Server, Sparkles, Layers } from 'lucide-react';
+import { FileText, MessageSquare, Key, Server, Sparkles, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getApiBaseUrl } from './api/client';
+import axios from 'axios';
 
 export default function App() {
   const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
-  const [backendUrl, setBackendUrl] = useState(localStorage.getItem('custom_backend_url') || '');
+  const [backendUrl, setBackendUrl] = useState(localStorage.getItem('custom_backend_url') || 'https://eighty-feet-unite.loca.lt');
+  const [backendStatus, setBackendStatus] = useState('checking'); // 'connected', 'disconnected', 'checking'
   const [activeDocument, setActiveDocument] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
 
   useEffect(() => {
     localStorage.setItem('openai_api_key', apiKey);
   }, [apiKey]);
+
+  // Check backend server health
+  const checkBackendHealth = async (url) => {
+    setBackendStatus('checking');
+    try {
+      const cleanUrl = url.endsWith('/api') ? url : `${url.replace(/\/$/, '')}/api`;
+      await axios.get(`${cleanUrl}/health`, { timeout: 4000 });
+      setBackendStatus('connected');
+    } catch (err) {
+      setBackendStatus('disconnected');
+    }
+  };
+
+  useEffect(() => {
+    checkBackendHealth(backendUrl);
+  }, [backendUrl]);
 
   const handleBackendUrlChange = (e) => {
     const val = e.target.value;
@@ -45,7 +64,7 @@ export default function App() {
             />
           </div>
 
-          <div className="input-container">
+          <div className="input-container" style={{ position: 'relative' }}>
             <Server size={16} style={{ color: '#6366f1', marginRight: '0.75rem' }} />
             <input 
               type="text"
@@ -53,6 +72,19 @@ export default function App() {
               value={backendUrl}
               onChange={handleBackendUrlChange}
             />
+            <span style={{ position: 'absolute', right: '12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              {backendStatus === 'connected' ? (
+                <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <CheckCircle2 size={14} /> Connected
+                </span>
+              ) : backendStatus === 'disconnected' ? (
+                <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <AlertCircle size={14} /> Disconnected
+                </span>
+              ) : (
+                <span style={{ color: '#9ca3af' }}>Connecting...</span>
+              )}
+            </span>
           </div>
         </div>
       </header>
