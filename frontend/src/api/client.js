@@ -1,8 +1,5 @@
 import axios from 'axios';
 
-// Default active backend server URL (routes static hosting uploads to active backend)
-const DEFAULT_CLOUD_BACKEND = 'https://eighty-feet-unite.loca.lt/api';
-
 export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
@@ -11,14 +8,6 @@ export const getApiBaseUrl = () => {
   const customBackend = localStorage.getItem('custom_backend_url');
   if (customBackend) {
     return customBackend.endsWith('/api') ? customBackend : `${customBackend.replace(/\/$/, '')}/api`;
-  }
-  // If hosted on external static hosts (vercel.app, github.io, netlify.app), fallback to default active backend tunnel
-  if (typeof window !== 'undefined' && (
-      window.location.hostname.includes('vercel.app') || 
-      window.location.hostname.includes('github.io') || 
-      window.location.hostname.includes('netlify.app')
-  )) {
-    return DEFAULT_CLOUD_BACKEND;
   }
   return '/api';
 };
