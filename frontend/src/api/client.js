@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Default active 24/7 cloud backend URL
+// Default active backend server URL (routes uploads to active backend server)
 const DEFAULT_CLOUD_BACKEND = 'https://eighty-feet-unite.loca.lt/api';
 
 export const getApiBaseUrl = () => {
