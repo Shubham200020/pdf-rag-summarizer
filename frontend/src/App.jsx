@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import PdfUploader from './components/PdfUploader';
 import SummaryRoadmapView from './components/SummaryRoadmapView';
 import RagChat from './components/RagChat';
-import { FileText, MessageSquare, Key, Server, Sparkles, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileText, MessageSquare, Key, Server, Sparkles, Layers, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { getApiBaseUrl } from './api/client';
 import axios from 'axios';
 
 export default function App() {
   const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
-  const [backendUrl, setBackendUrl] = useState(localStorage.getItem('custom_backend_url') || 'https://eighty-feet-unite.loca.lt');
+  const [backendUrl, setBackendUrl] = useState(localStorage.getItem('custom_backend_url') || '');
   const [backendStatus, setBackendStatus] = useState('checking'); // 'connected', 'disconnected', 'checking'
   const [activeDocument, setActiveDocument] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
@@ -21,8 +21,11 @@ export default function App() {
   const checkBackendHealth = async (url) => {
     setBackendStatus('checking');
     try {
-      const cleanUrl = url.endsWith('/api') ? url : `${url.replace(/\/$/, '')}/api`;
-      await axios.get(`${cleanUrl}/health`, { timeout: 4000 });
+      let targetUrl = '/api/health';
+      if (url) {
+        targetUrl = url.endsWith('/api') ? `${url}/health` : `${url.replace(/\/$/, '')}/api/health`;
+      }
+      await axios.get(targetUrl, { timeout: 4000 });
       setBackendStatus('connected');
     } catch (err) {
       setBackendStatus('disconnected');
@@ -41,6 +44,12 @@ export default function App() {
     } else {
       localStorage.removeItem('custom_backend_url');
     }
+  };
+
+  const handleResetToDefaultCloud = () => {
+    setBackendUrl('');
+    localStorage.removeItem('custom_backend_url');
+    checkBackendHealth('');
   };
 
   return (
@@ -68,10 +77,29 @@ export default function App() {
             <Server size={16} style={{ color: '#6366f1', marginRight: '0.75rem' }} />
             <input 
               type="text"
-              placeholder="Backend Server URL (e.g. https://eighty-feet-unite.loca.lt)"
+              placeholder="Cloud Backend (Auto 24/7) — or paste custom endpoint"
               value={backendUrl}
               onChange={handleBackendUrlChange}
             />
+            {backendUrl && (
+              <button 
+                onClick={handleResetToDefaultCloud}
+                title="Reset to Default 24/7 Vercel Cloud Server"
+                style={{
+                  position: 'absolute',
+                  right: '100px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <RefreshCw size={13} />
+              </button>
+            )}
             <span style={{ position: 'absolute', right: '12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               {backendStatus === 'connected' ? (
                 <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
