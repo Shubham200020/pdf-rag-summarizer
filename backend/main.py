@@ -9,15 +9,20 @@ if hasattr(sys.stderr, 'reconfigure'):
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from routers import pdf_router, chat_router
 
 app = FastAPI(
     title="PDF RAG & Roadmap Summarizer API",
-    description="FastAPI backend supporting PDF parsing, chunking, roadmap summarization, and RAG retrieval.",
+    description="High-performance, lightweight FastAPI backend supporting PDF parsing, roadmap summarization, and RAG retrieval.",
     version="1.0.0"
 )
 
+# Enable GZip compression middleware (min size 1000 bytes) to save Railway network bandwidth
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Enable CORS for cross-origin frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,7 +42,7 @@ def health_check():
         "version": "1.0.0"
     }
 
-# Mount production React build static files directly at root "/"
+# Mount production React build static files if present
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 frontend_dist = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist"))
 
