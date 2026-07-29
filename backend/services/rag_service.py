@@ -1,4 +1,5 @@
 from typing import Dict, Any, List
+import re
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -6,7 +7,7 @@ from services.vector_service import VectorService
 import config
 
 class RAGService:
-    """Conversational RAG retrieval service with page citations, real-world web data access, and zero-config synthesis."""
+    """Conversational RAG retrieval service with page citations, real-world web data access, and smart query-aware zero-config synthesis."""
     
     @staticmethod
     def fetch_web_search_context(query: str) -> List[Dict[str, Any]]:
@@ -63,13 +64,14 @@ class RAGService:
                     for d in docs
                 ]) + web_context_str
                 
-                llm = ChatOpenAI(temperature=0.2, model=model, openai_api_key=key)
+                # Temperature set strictly to 0.0 for zero hallucination and exact grounding
+                llm = ChatOpenAI(temperature=0.0, model=model, openai_api_key=key)
                 
                 prompt = ChatPromptTemplate.from_messages([
                     ("system", (
                         "You are an expert AI document assistant and career strategy consultant.\n"
-                        "Synthesize clear, well-structured, professional answers using the retrieved PDF context and real-world web data.\n"
-                        "Structure your output cleanly using markdown bullet points and bold section headers.\n\n"
+                        "Synthesize clear, strictly grounded, accurate answers using the retrieved PDF context and real-world web data.\n"
+                        "Maintain zero hallucination. Structure your output cleanly using markdown bullet points and bold section headers.\n\n"
                         "RETRIEVED CONTEXT:\n{context}\n"
                     )),
                     ("human", "{question}")
@@ -79,26 +81,52 @@ class RAGService:
                 answer = rag_chain.invoke({"context": context_text, "question": question})
                 return {"answer": answer, "sources": sources}
             except Exception as e:
-                print(f"[RAGService] OpenAI error: {e}. Falling back to zero-config synthesis.")
+                print(f"[RAGService] OpenAI error: {e}. Falling back to smart query-aware synthesis.")
 
-        # Zero-Config Retrieval Extractive Synthesizer
+        # Smart Query-Aware Extractive Synthesizer (Zero-Config Mode)
         if docs or enable_web_search:
-            # Combine content across chunks
-            combined_chunks = [d.page_content.strip() for d in docs]
-            all_text = "\n".join(combined_chunks)
+            # Tokenize question into relevant keywords
+            stopwords = {"what", "is", "the", "are", "about", "his", "her", "my", "me", "give", "tell", "more", "a", "an", "and", "or", "in", "on", "for", "with", "to", "of"}
+            q_words = [w.lower() for w in re.findall(r'\w+', question) if w.lower() not in stopwords]
             
-            lines = [l.strip() for l in all_text.split("\n") if l.strip()]
+            extracted_sentences = []
+            for doc in docs:
+                page_label = doc.metadata.get("page_label", doc.metadata.get("page", "1"))
+                content = doc.page_content.strip()
+                # Split content into logical sentences or bullet points
+                lines = [l.strip() for l in re.split(r'[\n\.\•\-\|]', content) if len(l.strip()) > 15]
+                
+                for line in lines:
+                    line_lower = line.lower()
+                    # Calculate relevance score based on keyword matches
+                    match_count = sum(1 for kw in q_words if kw in line_lower)
+                    if match_count > 0 or not q_words:
+                        extracted_sentences.append((match_count, page_label, line))
+
+            # Sort sentences by relevance score descending
+            extracted_sentences.sort(key=lambda x: x[0], reverse=True)
             
-            # Extract key sections (skills, projects, education)
-            bullet_points = []
-            for line in lines:
-                if any(k in line.lower() for k in ["skill", "project", "framework", "java", "python", "react", "angular", "engineered", "developed", "experience", "education", "college"]):
-                    if len(line) > 15 and line not in bullet_points:
-                        bullet_points.append(f"• {line}")
-            
-            summary_points = "\n".join(bullet_points[:8]) if bullet_points else "\n".join([f"• {l}" for l in lines[:5]])
-            
-            answer = f"### 📊 Synthesized Document Insights\n\n{summary_points}"
+            seen = set()
+            top_bullets = []
+            for score, pg, text in extracted_sentences:
+                if text.lower() not in seen:
+                    seen.add(text.lower())
+                    top_bullets.append(f"• **(Page {pg})**: {text}")
+                if len(top_bullets) >= 6:
+                    break
+
+            if not top_bullets:
+                # Fallback to top sentences from retrieved chunks
+                for doc in docs[:3]:
+                    pg = doc.metadata.get("page_label", "1")
+                    clean_lines = [l.strip() for l in doc.page_content.split('\n') if len(l.strip()) > 15]
+                    for l in clean_lines[:2]:
+                        if l.lower() not in seen:
+                            seen.add(l.lower())
+                            top_bullets.append(f"• **(Page {pg})**: {l}")
+
+            formatted_points = "\n".join(top_bullets) if top_bullets else "No specific matching details found."
+            answer = f"### 📌 Relevant Information Found in Document\n\n{formatted_points}"
             
             if web_context_str:
                 answer += f"\n\n### 🌐 Real-World Web Knowledge:\n{web_context_str}"

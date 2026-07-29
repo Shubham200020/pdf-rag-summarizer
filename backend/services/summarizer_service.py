@@ -21,7 +21,8 @@ class SummarizerService:
         
         if key and key != "your_openai_api_key_here":
             try:
-                llm = ChatOpenAI(temperature=0.2, model=model, openai_api_key=key)
+                # Temperature set strictly to 0.0 for deterministic factual summaries
+                llm = ChatOpenAI(temperature=0.0, model=model, openai_api_key=key)
                 
                 map_prompt = ChatPromptTemplate.from_messages([
                     ("system", "Summarize the key points of the following document section concisely:"),
