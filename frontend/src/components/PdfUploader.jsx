@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { uploadPdfApi } from '../api/client';
-import { Upload, FileText, CheckCircle, AlertOctagon, Loader } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertOctagon, Loader, ExternalLink } from 'lucide-react';
 
 export default function PdfUploader({ apiKey, onPdfUploaded }) {
   const [loading, setLoading] = useState(false);
@@ -91,13 +91,28 @@ export default function PdfUploader({ apiKey, onPdfUploaded }) {
           gap: '0.75rem' 
         }}>
           <AlertOctagon size={24} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
-          <div>
+          <div style={{ width: '100%' }}>
             <strong style={{ color: '#fca5a5', display: 'block', fontSize: '1rem', marginBottom: '0.25rem' }}>
               ⚠️ THIS PDF CANNOT BE EMBEDDED
             </strong>
             <span style={{ color: '#f8fafc', fontSize: '0.92rem', lineHeight: '1.5' }}>
               {error}
             </span>
+            {error.toLowerCase().includes('network error') && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.88rem', background: 'rgba(99, 102, 241, 0.15)', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid #6366f1' }}>
+                <span style={{ color: '#c7d2fe' }}>💡 <strong>Localtunnel Authorization Required:</strong> If using localtunnel, click below once to authorize your browser, then try uploading again:</span>
+                <div style={{ marginTop: '0.4rem' }}>
+                  <a 
+                    href="https://eighty-feet-unite.loca.lt" 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    style={{ color: '#a5b4fc', textDecoration: 'underline', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    Open Authorization Link (Verification IP: 45.250.227.158) <ExternalLink size={14} />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
