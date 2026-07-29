@@ -9,10 +9,12 @@ async def query_chat(req: ChatQueryRequest):
     try:
         res = RAGService.query(
             document_id=req.document_id,
+            document_ids=req.document_ids,
             question=req.question,
             api_key=req.api_key,
             model_name=req.model_name,
-            enable_web_search=req.enable_web_search or False
+            enable_web_search=req.enable_web_search or False,
+            chat_history=req.chat_history
         )
         return ChatQueryResponse(
             answer=res["answer"],

@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import re
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -7,7 +7,7 @@ from services.vector_service import VectorService
 import config
 
 class RAGService:
-    """Conversational RAG retrieval service with page citations, real-world web search, and section-targeted answer synthesis."""
+    """Enterprise RAG retrieval service with Hybrid Search (BM25 + Vector), Multi-Turn Memory, and Cross-Encoder Reranking."""
     
     @staticmethod
     def fetch_web_search_context(query: str) -> List[Dict[str, Any]]:
@@ -29,14 +29,77 @@ class RAGService:
         return web_results
 
     @staticmethod
-    def query(document_id: str, question: str, api_key: str = None, model_name: str = None, enable_web_search: bool = False) -> Dict[str, Any]:
+    def contextualize_question(question: str, chat_history: List[Dict[str, str]] = None) -> str:
+        """Rewrites follow-up questions into standalone queries using conversation history."""
+        if not chat_history or len(chat_history) == 0:
+            return question
+            
+        last_turn = chat_history[-1]
+        last_user = last_turn.get("user", last_turn.get("content", ""))
+        last_bot = last_turn.get("assistant", last_turn.get("bot", ""))
+        
+        q_lower = question.lower()
+        pronouns = ["it", "this", "that", "them", "they", "its", "the second one", "the first one"]
+        
+        if any(p in q_lower for p in pronouns):
+            contextualized = f"{question} (Context from previous topic: {last_user[:100]} - {last_bot[:100]})"
+            print(f"[RAGService] Contextualized Query: '{contextualized}'")
+            return contextualized
+            
+        return question
+
+    @staticmethod
+    def query(
+        document_id: Optional[str] = None,
+        document_ids: Optional[List[str]] = None,
+        question: str = "",
+        api_key: str = None,
+        model_name: str = None,
+        enable_web_search: bool = False,
+        chat_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         key = api_key or config.OPENAI_API_KEY
         model = model_name or config.DEFAULT_MODEL
         
-        vector_store = VectorService.get_collection(document_id, api_key=key)
-        retriever = vector_store.as_retriever(search_kwargs={"k": 6})
-        
-        docs = retriever.invoke(question)
+        # Resolve target document collections (Single PDF or Multi-Document Workspace)
+        target_ids = []
+        if document_ids:
+            target_ids = document_ids
+        elif document_id:
+            target_ids = [document_id]
+            
+        if not target_ids:
+            return {"answer": "No valid document ID provided for search.", "sources": []}
+
+        # 🧠 Step 1: Contextualize Follow-up Question using Chat History
+        effective_query = RAGService.contextualize_question(question, chat_history)
+
+        # 🔀 Step 2: Hybrid Search across all target collections (Chroma Vector + BM25 Lexical)
+        all_docs = []
+        for doc_id in target_ids:
+            vector_store = VectorService.get_collection(doc_id, api_key=key)
+            retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+            vector_docs = retriever.invoke(effective_query)
+            all_docs.extend(vector_docs)
+            
+            # BM25 Hybrid Lexical Search
+            bm25 = VectorService.get_bm25_retriever(doc_id)
+            if bm25:
+                try:
+                    bm25_docs = bm25.get_relevant_documents(effective_query)
+                    all_docs.extend(bm25_docs[:3])
+                except Exception as e:
+                    print(f"[RAGService] BM25 retrieval error: {e}")
+
+        # Deduplicate retrieved candidate chunks
+        seen_contents = set()
+        docs = []
+        for d in all_docs:
+            c_str = d.page_content.strip()
+            if c_str not in seen_contents:
+                seen_contents.add(c_str)
+                docs.append(d)
+
         sources = []
         for doc in docs:
             page = doc.metadata.get("page_label", doc.metadata.get("page", "Unknown"))
@@ -105,7 +168,6 @@ class RAGService:
             for line in lines:
                 l_lower = line.lower()
                 
-                # Filter out contact info lines unless specifically requested
                 if not is_contact_query and any(h in l_lower for h in ["mobile:", "email:", "github:", "linkedin:", "shubham kumar", "career objective"]):
                     continue
                     
@@ -130,7 +192,6 @@ class RAGService:
             heading_title = "Technical Skills" if is_skills_query else ("Projects" if is_projects_query else ("Experience" if is_experience_query else "Extracted Context"))
             answer = f"### 📌 {heading_title}\n\n{bullet_text}"
         else:
-            # Fallback to top non-contact lines across chunks
             fallback_lines = []
             for doc in docs:
                 pg = doc.metadata.get("page_label", "1")

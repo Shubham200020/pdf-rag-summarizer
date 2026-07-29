@@ -18,11 +18,13 @@ class SummarizeResponse(BaseModel):
     summary_and_roadmap: str
 
 class ChatQueryRequest(BaseModel):
-    document_id: str = Field(..., description="Document collection ID")
+    document_id: Optional[str] = Field(None, description="Single document collection ID")
+    document_ids: Optional[List[str]] = Field(None, description="Multi-document workspace collection IDs")
     question: str = Field(..., description="User query")
     model_name: Optional[str] = "gpt-4o-mini"
     api_key: Optional[str] = None
     enable_web_search: Optional[bool] = False
+    chat_history: Optional[List[Dict[str, str]]] = Field(None, description="Past chat conversation history")
 
 class SourceCitation(BaseModel):
     page: Any

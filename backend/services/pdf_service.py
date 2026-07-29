@@ -3,14 +3,13 @@ import re
 import fitz
 from typing import List, Tuple
 from pypdf import PdfReader
-from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from services.image_service import ImageService
 import config
 
 class PDFService:
-    """PDF parsing, human-centric semantic chunking, section metadata tagging, and audit validation service."""
+    """PDF parsing, PyMuPDF block layout preservation, human-centric semantic chunking, and audit validation service."""
     
     @staticmethod
     def audit_pdf(pdf_path: str, file_size: int) -> Tuple[bool, str]:
@@ -53,23 +52,46 @@ class PDFService:
 
     @staticmethod
     def process_pdf(pdf_path: str, api_key: str = None) -> Tuple[List[Document], int]:
-        """Parses PDF text using Section-Preserving Semantic Chunking and extracts embedded images/figures for vector indexing."""
+        """Parses PDF text using PyMuPDF block layout preservation and extracts embedded images/figures for vector indexing."""
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF not found at {pdf_path}")
             
-        loader = PyPDFLoader(pdf_path)
-        pages = loader.load()
-        total_pages = len(pages)
+        doc_fitz = fitz.open(pdf_path)
+        total_pages = len(doc_fitz)
         file_name = os.path.basename(pdf_path)
         
+        pages = []
         section_headers = ["TECHNICAL SKILLS", "ACADEMIC PROJECTS", "PROJECTS", "EXPERIENCE", "EDUCATION", "TRAINING", "CAREER OBJECTIVE", "CERTIFICATIONS"]
         
-        for p in pages:
-            p.metadata["source_file"] = file_name
-            p.metadata["content_type"] = "text_chunk"
-            if "page" in p.metadata:
-                p.metadata["page_label"] = p.metadata["page"] + 1
+        # 📐 Block Layout Extraction: Preserves tables, multi-column sections, and logical paragraph blocks
+        for page_idx in range(total_pages):
+            page_fitz = doc_fitz[page_idx]
+            blocks = page_fitz.get_text("blocks")
+            
+            # Sort blocks vertically (y0) then horizontally (x0)
+            blocks.sort(key=lambda b: (b[1], b[0]))
+            
+            page_text_blocks = []
+            for b in blocks:
+                block_text = b[4].strip()
+                if len(block_text) > 5:
+                    page_text_blocks.append(block_text)
+                    
+            page_combined_text = "\n\n".join(page_text_blocks)
+            
+            if page_combined_text.strip():
+                doc_obj = Document(
+                    page_content=page_combined_text,
+                    metadata={
+                        "source_file": file_name,
+                        "content_type": "text_chunk",
+                        "page": page_idx,
+                        "page_label": page_idx + 1
+                    }
+                )
+                pages.append(doc_obj)
 
+        # 🧠 Human-Centric Semantic Splitter
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=config.CHUNK_SIZE,
             chunk_overlap=config.CHUNK_OVERLAP,
@@ -85,7 +107,6 @@ class PDFService:
         
         text_chunks = splitter.split_documents(pages)
         
-        # Tag active section heading on each individual chunk
         for chunk in text_chunks:
             chunk.page_content = re.sub(r' +', ' ', chunk.page_content).strip()
             active_sec = "GENERAL"
@@ -96,7 +117,7 @@ class PDFService:
                     break
             chunk.metadata["section_heading"] = active_sec
         
-        # Extract and Caption Embedded Images / Diagrams
+        # 🖼️ Extract and Caption Embedded Images / Diagrams
         image_chunks = ImageService.extract_and_caption_images(pdf_path, api_key=api_key)
         
         all_chunks = text_chunks + image_chunks

@@ -7,7 +7,6 @@ export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  // Check custom backend URL stored in localStorage
   const customBackend = localStorage.getItem('custom_backend_url');
   if (customBackend) {
     return customBackend.endsWith('/api') ? customBackend : `${customBackend.replace(/\/$/, '')}/api`;
@@ -39,14 +38,16 @@ export const summarizePdfApi = async (documentId, apiKey = '', modelName = 'gpt-
   return response.data;
 };
 
-export const queryChatApi = async (documentId, question, apiKey = '', modelName = 'gpt-4o-mini', enableWebSearch = false) => {
+export const queryChatApi = async (documentId, question, apiKey = '', modelName = 'gpt-4o-mini', enableWebSearch = false, chatHistory = [], documentIds = null) => {
   const baseUrl = getApiBaseUrl();
   const response = await axios.post(`${baseUrl}/chat/query`, {
     document_id: documentId,
+    document_ids: documentIds,
     question: question,
     model_name: modelName,
     api_key: apiKey || null,
-    enable_web_search: enableWebSearch
+    enable_web_search: enableWebSearch,
+    chat_history: chatHistory
   });
   return response.data;
 };

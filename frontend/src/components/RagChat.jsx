@@ -19,11 +19,18 @@ export default function RagChat({ documentId, apiKey }) {
 
     const userMessage = inputQuery;
     setInputQuery('');
+    
+    // Format past chat history for backend
+    const chatHistory = messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
 
     try {
-      const data = await queryChatApi(documentId, userMessage, apiKey, 'gpt-4o-mini', enableWebSearch);
+      const data = await queryChatApi(documentId, userMessage, apiKey, 'gpt-4o-mini', enableWebSearch, chatHistory);
       setMessages(prev => [
         ...prev, 
         { role: 'assistant', content: data.answer, sources: data.sources }
@@ -38,7 +45,6 @@ export default function RagChat({ documentId, apiKey }) {
     }
   };
 
-  // Helper function to format answer text nicely with paragraphs
   const renderFormattedText = (text) => {
     if (!text) return null;
     return text.split('\n').map((paragraph, i) => {
@@ -62,7 +68,6 @@ export default function RagChat({ documentId, apiKey }) {
           </div>
         </div>
 
-        {/* Real-World Web Data Toggle */}
         <label 
           style={{ 
             display: 'flex', 
@@ -95,7 +100,7 @@ export default function RagChat({ documentId, apiKey }) {
           <div style={{ textAlign: 'center', color: '#94a3b8', padding: '3.5rem 1rem' }}>
             <Bot size={44} style={{ margin: '0 auto 1rem', color: '#6366f1', opacity: 0.8 }} />
             <h4 style={{ color: '#f8fafc', fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.35rem' }}>Ask anything about your document</h4>
-            <p style={{ fontSize: '0.875rem' }}>Type a question below to perform semantic vector search across pages.</p>
+            <p style={{ fontSize: '0.875rem' }}>Type a question below to perform hybrid vector and keyword search across pages.</p>
           </div>
         )}
 
@@ -130,7 +135,7 @@ export default function RagChat({ documentId, apiKey }) {
         {loading && (
           <div className="chat-message assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#94a3b8' }}>
             <Loader className="animate-spin" size={18} style={{ color: '#6366f1' }} />
-            <span>Searching vector context and generating synthesized answer...</span>
+            <span>Performing Hybrid BM25 & Vector Search...</span>
           </div>
         )}
         <div ref={chatBottomRef} />
