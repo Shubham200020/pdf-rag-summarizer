@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { queryChatApi } from '../api/client';
-import { Send, Bot, User, BookOpen, Loader } from 'lucide-react';
+import { Send, Bot, User, BookOpen, Loader, Globe } from 'lucide-react';
 
 export default function RagChat({ documentId, apiKey }) {
   const [messages, setMessages] = useState([]);
   const [inputQuery, setInputQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [enableWebSearch, setEnableWebSearch] = useState(false);
   const chatBottomRef = useRef(null);
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export default function RagChat({ documentId, apiKey }) {
     setLoading(true);
 
     try {
-      const data = await queryChatApi(documentId, userMessage, apiKey);
+      const data = await queryChatApi(documentId, userMessage, apiKey, 'gpt-4o-mini', enableWebSearch);
       setMessages(prev => [
         ...prev, 
         { role: 'assistant', content: data.answer, sources: data.sources }
@@ -52,12 +53,41 @@ export default function RagChat({ documentId, apiKey }) {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <Bot size={28} style={{ color: '#6366f1' }} />
-        <div>
-          <h2 style={{ fontSize: '1.25rem', color: '#f9fafb', fontWeight: 700 }}>Conversational RAG Q&A</h2>
-          <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>Ask questions about your PDF and receive grounded answers with page citations.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <Bot size={28} style={{ color: '#6366f1' }} />
+          <div>
+            <h2 style={{ fontSize: '1.25rem', color: '#f9fafb', fontWeight: 700 }}>Conversational RAG Q&A</h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>Ask questions about your PDF and receive grounded answers with page citations.</p>
+          </div>
         </div>
+
+        {/* Real-World Web Data Toggle */}
+        <label 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem', 
+            background: enableWebSearch ? 'rgba(99, 102, 241, 0.18)' : 'rgba(31, 41, 55, 0.6)', 
+            border: `1px solid ${enableWebSearch ? '#6366f1' : '#374151'}`,
+            padding: '0.45rem 0.85rem',
+            borderRadius: '9999px',
+            cursor: 'pointer',
+            fontSize: '0.825rem',
+            color: enableWebSearch ? '#a5b4fc' : '#9ca3af',
+            userSelect: 'none',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <Globe size={15} style={{ color: enableWebSearch ? '#818cf8' : '#9ca3af' }} />
+          <span style={{ fontWeight: 600 }}>Real-World Web Data</span>
+          <input 
+            type="checkbox"
+            checked={enableWebSearch}
+            onChange={(e) => setEnableWebSearch(e.target.checked)}
+            style={{ cursor: 'pointer', accentColor: '#6366f1' }}
+          />
+        </label>
       </div>
 
       <div className="chat-box">
@@ -83,12 +113,12 @@ export default function RagChat({ documentId, apiKey }) {
             {msg.sources && msg.sources.length > 0 && (
               <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.75rem' }}>
                 <span style={{ fontSize: '0.825rem', color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
-                  <BookOpen size={14} /> Grounded Page Citations:
+                  <BookOpen size={14} /> Grounded Page & Web Citations:
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   {msg.sources.map((src, i) => (
                     <div key={i} className="citation-badge">
-                      <strong style={{ color: '#6ee7b7' }}>Page {src.page}:</strong> <em>"{src.snippet}"</em>
+                      <strong style={{ color: '#6ee7b7' }}>{src.page}:</strong> <em>"{src.snippet}"</em>
                     </div>
                   ))}
                 </div>
@@ -100,7 +130,7 @@ export default function RagChat({ documentId, apiKey }) {
         {loading && (
           <div className="chat-message assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#94a3b8' }}>
             <Loader className="animate-spin" size={18} style={{ color: '#6366f1' }} />
-            <span>Searching vector context and generating citation answer...</span>
+            <span>Searching vector context and generating synthesized answer...</span>
           </div>
         )}
         <div ref={chatBottomRef} />
@@ -110,7 +140,7 @@ export default function RagChat({ documentId, apiKey }) {
         <input 
           className="input-field" 
           type="text"
-          placeholder={documentId ? "Type your question about the PDF..." : "Please upload a PDF document first..."}
+          placeholder={documentId ? (enableWebSearch ? "Ask PDF question + search live real-world web data..." : "Type your question about the PDF...") : "Please upload a PDF document first..."}
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
           disabled={!documentId || loading}

@@ -22,6 +22,7 @@ class ChatQueryRequest(BaseModel):
     question: str = Field(..., description="User query")
     model_name: Optional[str] = "gpt-4o-mini"
     api_key: Optional[str] = None
+    enable_web_search: Optional[bool] = False
 
 class SourceCitation(BaseModel):
     page: Any

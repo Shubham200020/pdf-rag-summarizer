@@ -11,7 +11,8 @@ async def query_chat(req: ChatQueryRequest):
             document_id=req.document_id,
             question=req.question,
             api_key=req.api_key,
-            model_name=req.model_name
+            model_name=req.model_name,
+            enable_web_search=req.enable_web_search or False
         )
         return ChatQueryResponse(
             answer=res["answer"],

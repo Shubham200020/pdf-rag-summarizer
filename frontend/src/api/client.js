@@ -39,13 +39,14 @@ export const summarizePdfApi = async (documentId, apiKey = '', modelName = 'gpt-
   return response.data;
 };
 
-export const queryChatApi = async (documentId, question, apiKey = '', modelName = 'gpt-4o-mini') => {
+export const queryChatApi = async (documentId, question, apiKey = '', modelName = 'gpt-4o-mini', enableWebSearch = false) => {
   const baseUrl = getApiBaseUrl();
   const response = await axios.post(`${baseUrl}/chat/query`, {
     document_id: documentId,
     question: question,
     model_name: modelName,
-    api_key: apiKey || null
+    api_key: apiKey || null,
+    enable_web_search: enableWebSearch
   });
   return response.data;
 };
