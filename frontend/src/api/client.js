@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Default active backend server URL (routes uploads to active backend server)
-const DEFAULT_CLOUD_BACKEND = 'https://eighty-feet-unite.loca.lt/api';
+// Active high-speed Cloudflare Tunnel backend endpoint (Zero 502/503 errors)
+const DEFAULT_CLOUD_BACKEND = 'https://ice-occasions-profession-joe.trycloudflare.com/api';
 
 export const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
@@ -15,14 +15,6 @@ export const getApiBaseUrl = () => {
   return DEFAULT_CLOUD_BACKEND;
 };
 
-// Axios instance with default headers for localtunnel bypass
-const apiClient = axios.create({
-  headers: {
-    'bypass-tunnel-reminder': 'true',
-    'Bypass-Tunnel-Reminder': 'true'
-  }
-});
-
 export const uploadPdfApi = async (file, apiKey = '') => {
   const formData = new FormData();
   formData.append('file', file);
@@ -31,19 +23,15 @@ export const uploadPdfApi = async (file, apiKey = '') => {
   }
   
   const baseUrl = getApiBaseUrl();
-  const response = await apiClient.post(`${baseUrl}/pdf/upload`, formData, {
-    headers: { 
-      'Content-Type': 'multipart/form-data',
-      'bypass-tunnel-reminder': 'true',
-      'Bypass-Tunnel-Reminder': 'true'
-    }
+  const response = await axios.post(`${baseUrl}/pdf/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
   });
   return response.data;
 };
 
 export const summarizePdfApi = async (documentId, apiKey = '', modelName = 'gpt-4o-mini') => {
   const baseUrl = getApiBaseUrl();
-  const response = await apiClient.post(`${baseUrl}/pdf/summarize`, {
+  const response = await axios.post(`${baseUrl}/pdf/summarize`, {
     document_id: documentId,
     model_name: modelName,
     api_key: apiKey || null
@@ -53,7 +41,7 @@ export const summarizePdfApi = async (documentId, apiKey = '', modelName = 'gpt-
 
 export const queryChatApi = async (documentId, question, apiKey = '', modelName = 'gpt-4o-mini') => {
   const baseUrl = getApiBaseUrl();
-  const response = await apiClient.post(`${baseUrl}/chat/query`, {
+  const response = await axios.post(`${baseUrl}/chat/query`, {
     document_id: documentId,
     question: question,
     model_name: modelName,
