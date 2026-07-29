@@ -1,4 +1,5 @@
 import os
+import re
 import fitz
 from typing import List, Tuple
 from pypdf import PdfReader
@@ -9,7 +10,7 @@ from services.image_service import ImageService
 import config
 
 class PDFService:
-    """PDF parsing, chunking, multimodal image extraction, and audit validation service."""
+    """PDF parsing, human-centric semantic chunking, multimodal image extraction, and audit validation service."""
     
     @staticmethod
     def audit_pdf(pdf_path: str, file_size: int) -> Tuple[bool, str]:
@@ -58,7 +59,7 @@ class PDFService:
 
     @staticmethod
     def process_pdf(pdf_path: str, api_key: str = None) -> Tuple[List[Document], int]:
-        """Parses PDF text, extracts embedded images/figures, and returns all chunks & captions for vector indexing."""
+        """Parses PDF text using Human-Centric Semantic Chunking and extracts embedded images/figures for vector indexing."""
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF not found at {pdf_path}")
             
@@ -67,19 +68,43 @@ class PDFService:
         total_pages = len(pages)
         
         file_name = os.path.basename(pdf_path)
+        
+        # Track document headings for topic-aware section metadata
+        current_section = "General Overview"
+        section_headers = ["TECHNICAL SKILLS", "PROJECTS", "EXPERIENCE", "EDUCATION", "CAREER OBJECTIVE", "CERTIFICATIONS", "SUMMARY", "PUBLICATIONS"]
+        
         for p in pages:
             p.metadata["source_file"] = file_name
             p.metadata["content_type"] = "text_chunk"
             if "page" in p.metadata:
                 p.metadata["page_label"] = p.metadata["page"] + 1
+            
+            # Detect active section heading in page content
+            for header in section_headers:
+                if header in p.page_content.upper():
+                    current_section = header
+                    break
+            p.metadata["section_heading"] = current_section
 
+        # 🧠 Human-Centric Semantic Splitter: Splits cleanly on logical sections, list items, and full sentences
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=config.CHUNK_SIZE,
             chunk_overlap=config.CHUNK_OVERLAP,
-            separators=["\n\n", "\n", " ", ""]
+            separators=[
+                "\n\n# ", "\n\n## ", "\n\n### ", 
+                "\n\nPROJECTS", "\n\nTECHNICAL SKILLS", "\n\nEXPERIENCE", "\n\nEDUCATION", "\n\nCAREER OBJECTIVE",
+                "\n\n\n", "\n\n", 
+                "\n• ", "\n- ", "\n* ", "\n1. ", "\n2. ", "\n3. ",
+                ". ", "? ", "! ",
+                "\n", " "
+            ]
         )
         
         text_chunks = splitter.split_documents(pages)
+        
+        # Clean up each chunk to ensure human readability
+        for chunk in text_chunks:
+            chunk.page_content = re.sub(r' +', ' ', chunk.page_content).strip()
         
         # 🖼️ Extract and Caption Embedded Images / Diagrams
         image_chunks = ImageService.extract_and_caption_images(pdf_path, api_key=api_key)
