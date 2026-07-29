@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { queryChatApi } from '../api/client';
-import { Send, Bot, User, BookOpen, Loader, Globe } from 'lucide-react';
+import { Send, Bot, User, BookOpen, Loader, Globe, Trash2 } from 'lucide-react';
 
 export default function RagChat({ documentId, apiKey }) {
   const [messages, setMessages] = useState([]);
@@ -9,9 +9,41 @@ export default function RagChat({ documentId, apiKey }) {
   const [enableWebSearch, setEnableWebSearch] = useState(false);
   const chatBottomRef = useRef(null);
 
+  // 💾 Load persistent chat history for the active documentId from localStorage
+  useEffect(() => {
+    if (documentId) {
+      const savedChat = localStorage.getItem(`rag_chat_${documentId}`);
+      if (savedChat) {
+        try {
+          setMessages(JSON.parse(savedChat));
+        } catch (e) {
+          console.error("Failed to parse saved chat history:", e);
+          setMessages([]);
+        }
+      } else {
+        setMessages([]);
+      }
+    }
+  }, [documentId]);
+
+  // 💾 Save chat history to localStorage whenever messages change
+  useEffect(() => {
+    if (documentId && messages.length > 0) {
+      localStorage.setItem(`rag_chat_${documentId}`, JSON.stringify(messages));
+    }
+  }, [messages, documentId]);
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  const handleClearHistory = () => {
+    if (!documentId) return;
+    if (window.confirm("Are you sure you want to clear chat history for this document?")) {
+      localStorage.removeItem(`rag_chat_${documentId}`);
+      setMessages([]);
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -68,31 +100,56 @@ export default function RagChat({ documentId, apiKey }) {
           </div>
         </div>
 
-        <label 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem', 
-            background: enableWebSearch ? 'rgba(99, 102, 241, 0.18)' : 'rgba(31, 41, 55, 0.6)', 
-            border: `1px solid ${enableWebSearch ? '#6366f1' : '#374151'}`,
-            padding: '0.45rem 0.85rem',
-            borderRadius: '9999px',
-            cursor: 'pointer',
-            fontSize: '0.825rem',
-            color: enableWebSearch ? '#a5b4fc' : '#9ca3af',
-            userSelect: 'none',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <Globe size={15} style={{ color: enableWebSearch ? '#818cf8' : '#9ca3af' }} />
-          <span style={{ fontWeight: 600 }}>Real-World Web Data</span>
-          <input 
-            type="checkbox"
-            checked={enableWebSearch}
-            onChange={(e) => setEnableWebSearch(e.target.checked)}
-            style={{ cursor: 'pointer', accentColor: '#6366f1' }}
-          />
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {messages.length > 0 && (
+            <button
+              onClick={handleClearHistory}
+              title="Clear chat history for this PDF"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171',
+                padding: '0.45rem 0.75rem',
+                borderRadius: '9999px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Trash2 size={14} /> Clear History
+            </button>
+          )}
+
+          <label 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              background: enableWebSearch ? 'rgba(99, 102, 241, 0.18)' : 'rgba(31, 41, 55, 0.6)', 
+              border: `1px solid ${enableWebSearch ? '#6366f1' : '#374151'}`,
+              padding: '0.45rem 0.85rem',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              fontSize: '0.825rem',
+              color: enableWebSearch ? '#a5b4fc' : '#9ca3af',
+              userSelect: 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Globe size={15} style={{ color: enableWebSearch ? '#818cf8' : '#9ca3af' }} />
+            <span style={{ fontWeight: 600 }}>Real-World Web Data</span>
+            <input 
+              type="checkbox"
+              checked={enableWebSearch}
+              onChange={(e) => setEnableWebSearch(e.target.checked)}
+              style={{ cursor: 'pointer', accentColor: '#6366f1' }}
+            />
+          </label>
+        </div>
       </div>
 
       <div className="chat-box">
