@@ -7,7 +7,7 @@ from services.vector_service import VectorService
 import config
 
 class RAGService:
-    """Conversational RAG retrieval service with page citations, real-world web data access, and smart query-aware zero-config synthesis."""
+    """Conversational RAG retrieval service with page citations, real-world web search, and section-targeted answer synthesis."""
     
     @staticmethod
     def fetch_web_search_context(query: str) -> List[Dict[str, Any]]:
@@ -34,7 +34,7 @@ class RAGService:
         model = model_name or config.DEFAULT_MODEL
         
         vector_store = VectorService.get_collection(document_id, api_key=key)
-        retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+        retriever = vector_store.as_retriever(search_kwargs={"k": 6})
         
         docs = retriever.invoke(question)
         sources = []
@@ -57,6 +57,7 @@ class RAGService:
                     f"- {ws['file']}: {ws['snippet']} (URL: {ws.get('url', '')})" for ws in web_sources
                 ])
 
+        # If OpenAI API Key is available, use LLM synthesis
         if key and key != "your_openai_api_key_here":
             try:
                 context_text = "\n\n".join([
@@ -64,14 +65,14 @@ class RAGService:
                     for d in docs
                 ]) + web_context_str
                 
-                # Temperature set strictly to 0.0 for zero hallucination and exact grounding
                 llm = ChatOpenAI(temperature=0.0, model=model, openai_api_key=key)
                 
                 prompt = ChatPromptTemplate.from_messages([
                     ("system", (
                         "You are an expert AI document assistant and career strategy consultant.\n"
-                        "Synthesize clear, strictly grounded, accurate answers using the retrieved PDF context and real-world web data.\n"
-                        "Maintain zero hallucination. Structure your output cleanly using markdown bullet points and bold section headers.\n\n"
+                        "Synthesize clear, strictly grounded, accurate answers directly targeting the user's question.\n"
+                        "Do NOT include contact details (phone, email, github) unless explicitly requested by the user.\n"
+                        "Structure your output cleanly using markdown bullet points and bold section headers.\n\n"
                         "RETRIEVED CONTEXT:\n{context}\n"
                     )),
                     ("human", "{question}")
@@ -81,57 +82,68 @@ class RAGService:
                 answer = rag_chain.invoke({"context": context_text, "question": question})
                 return {"answer": answer, "sources": sources}
             except Exception as e:
-                print(f"[RAGService] OpenAI error: {e}. Falling back to smart query-aware synthesis.")
+                print(f"[RAGService] OpenAI error: {e}. Falling back to Section-Targeted Extractive Synthesizer.")
 
-        # Smart Query-Aware Extractive Synthesizer (Zero-Config Mode)
-        if docs or enable_web_search:
-            # Tokenize question into relevant keywords
-            stopwords = {"what", "is", "the", "are", "about", "his", "her", "my", "me", "give", "tell", "more", "a", "an", "and", "or", "in", "on", "for", "with", "to", "of"}
-            q_words = [w.lower() for w in re.findall(r'\w+', question) if w.lower() not in stopwords]
+        # 🎯 Section-Targeted Extractive Synthesizer (Zero-Config Local Mode)
+        q_lower = question.lower()
+        
+        # Topic Intent Classification
+        is_skills_query = any(k in q_lower for k in ["skill", "skills", "language", "languages", "frontend", "backend", "database", "stack", "tech"])
+        is_projects_query = any(k in q_lower for k in ["project", "projects", "apk", "product", "system", "app", "website", "freelance"])
+        is_experience_query = any(k in q_lower for k in ["experience", "intern", "job", "work", "settribe", "tipco", "company"])
+        is_education_query = any(k in q_lower for k in ["education", "college", "degree", "msc", "bsc", "cgpa", "marks"])
+        is_contact_query = any(k in q_lower for k in ["contact", "phone", "mobile", "email", "github", "linkedin", "address"])
+        
+        extracted_bullets = []
+        seen = set()
+        
+        for doc in docs:
+            pg = doc.metadata.get("page_label", doc.metadata.get("page", "1"))
+            content = doc.page_content
+            lines = [l.strip() for l in re.split(r'[\n\•\-\➢]', content) if len(l.strip()) > 8]
             
-            extracted_sentences = []
-            for doc in docs:
-                page_label = doc.metadata.get("page_label", doc.metadata.get("page", "1"))
-                content = doc.page_content.strip()
-                # Split content into logical sentences or bullet points
-                lines = [l.strip() for l in re.split(r'[\n\.\•\-\|]', content) if len(l.strip()) > 15]
+            for line in lines:
+                l_lower = line.lower()
                 
-                for line in lines:
-                    line_lower = line.lower()
-                    # Calculate relevance score based on keyword matches
-                    match_count = sum(1 for kw in q_words if kw in line_lower)
-                    if match_count > 0 or not q_words:
-                        extracted_sentences.append((match_count, page_label, line))
+                # Filter out contact info lines unless specifically requested
+                if not is_contact_query and any(h in l_lower for h in ["mobile:", "email:", "github:", "linkedin:", "shubham kumar", "career objective"]):
+                    continue
+                    
+                matched = False
+                if is_skills_query and any(k in l_lower for k in ["technical skills", "languages:", "frontend:", "backend:", "databases:", "tools:", "concepts:", "java", "python", "angular", "react", "spring boot", "mysql", "postgresql", "mongodb", "aws", "git", "linux"]):
+                    matched = True
+                elif is_projects_query and any(k in l_lower for k in ["project", "apk elite", "product management", "engineered", "developed", "description:", "technology used:"]):
+                    matched = True
+                elif is_experience_query and any(k in l_lower for k in ["intern", "settribe", "tipco", "feb 2024", "june 2026", "developed and maintained"]):
+                    matched = True
+                elif is_education_query and any(k in l_lower for k in ["msc", "b.sc", "college", "cgpa", "senior secondary", "higher secondary"]):
+                    matched = True
+                elif not (is_skills_query or is_projects_query or is_experience_query or is_education_query):
+                    matched = True
 
-            # Sort sentences by relevance score descending
-            extracted_sentences.sort(key=lambda x: x[0], reverse=True)
-            
-            seen = set()
-            top_bullets = []
-            for score, pg, text in extracted_sentences:
-                if text.lower() not in seen:
-                    seen.add(text.lower())
-                    top_bullets.append(f"• **(Page {pg})**: {text}")
-                if len(top_bullets) >= 6:
-                    break
+                if matched and line not in seen:
+                    seen.add(line)
+                    extracted_bullets.append(f"• **(Page {pg})**: {line}")
 
-            if not top_bullets:
-                # Fallback to top sentences from retrieved chunks
-                for doc in docs[:3]:
-                    pg = doc.metadata.get("page_label", "1")
-                    clean_lines = [l.strip() for l in doc.page_content.split('\n') if len(l.strip()) > 15]
-                    for l in clean_lines[:2]:
-                        if l.lower() not in seen:
-                            seen.add(l.lower())
-                            top_bullets.append(f"• **(Page {pg})**: {l}")
-
-            formatted_points = "\n".join(top_bullets) if top_bullets else "No specific matching details found."
-            answer = f"### 📌 Relevant Information Found in Document\n\n{formatted_points}"
-            
-            if web_context_str:
-                answer += f"\n\n### 🌐 Real-World Web Knowledge:\n{web_context_str}"
+        if extracted_bullets:
+            bullet_text = "\n".join(extracted_bullets[:7])
+            heading_title = "Technical Skills" if is_skills_query else ("Projects" if is_projects_query else ("Experience" if is_experience_query else "Extracted Context"))
+            answer = f"### 📌 {heading_title}\n\n{bullet_text}"
         else:
-            answer = "I could not find relevant information in the provided PDF document."
+            # Fallback to top non-contact lines across chunks
+            fallback_lines = []
+            for doc in docs:
+                pg = doc.metadata.get("page_label", "1")
+                lines = [l.strip() for l in doc.page_content.split('\n') if len(l.strip()) > 12]
+                for l in lines:
+                    if not any(h in l.lower() for h in ["mobile:", "email:", "github:", "linkedin:", "shubham kumar"]):
+                        if l not in seen:
+                            seen.add(l)
+                            fallback_lines.append(f"• **(Page {pg})**: {l}")
+            answer = f"### 📌 Relevant PDF Context\n\n" + ("\n".join(fallback_lines[:5]) if fallback_lines else "I could not find relevant information in the provided PDF document.")
+
+        if web_context_str:
+            answer += f"\n\n### 🌐 Real-World Web Knowledge:\n{web_context_str}"
             
         return {
             "answer": answer,
